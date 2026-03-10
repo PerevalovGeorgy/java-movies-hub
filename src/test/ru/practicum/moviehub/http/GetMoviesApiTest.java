@@ -55,7 +55,7 @@ public class GetMoviesApiTest {
     @Test
     void getMovies_whenEmpty_returnsEmptyArray() throws Exception {
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(BASE+"/movies"))
+                .uri(URI.create(BASE + "/movies"))
                 .GET()
                 .build();
 
@@ -80,7 +80,7 @@ public class GetMoviesApiTest {
         server.addMovie(new Movie("Начало", 2010));
 
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(BASE+"/movies"))
+                .uri(URI.create(BASE + "/movies"))
                 .GET()
                 .build();
 
@@ -208,7 +208,6 @@ public class GetMoviesApiTest {
         JsonArray jsonArray = JsonParser.parseString(resp.body()).getAsJsonArray();
         assertEquals(2, jsonArray.size());
 
-        // Проверяем, что все фильмы 2010 года
         for (JsonElement element : jsonArray) {
             assertEquals(2010, element.getAsJsonObject().get("year").getAsInt());
         }
@@ -266,7 +265,6 @@ public class GetMoviesApiTest {
         JsonObject error = JsonParser.parseString(resp.body()).getAsJsonObject();
         assertEquals("Метод не поддерживается", error.get("error").getAsString());
 
-        // Проверяем заголовок Allow
         String allow = resp.headers().firstValue("Allow").orElse("");
         assertTrue(allow.contains("GET"));
         assertTrue(allow.contains("POST"));
