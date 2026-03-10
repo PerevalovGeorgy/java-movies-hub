@@ -19,6 +19,7 @@ public class Movie {
     public Integer getId() {
         return id;
     }
+
     public void setId(Integer id) {
         this.id = id;
     }
@@ -26,6 +27,7 @@ public class Movie {
     public String getTitle() {
         return title;
     }
+
     public void setTitle(String title) {
         this.title = title;
     }
@@ -33,6 +35,7 @@ public class Movie {
     public Integer getYear() {
         return year;
     }
+
     public void setYear(Integer year) {
         this.year = year;
     }
