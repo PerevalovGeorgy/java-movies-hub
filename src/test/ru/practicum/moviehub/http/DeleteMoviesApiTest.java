@@ -17,16 +17,17 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static ru.practicum.moviehub.http.GetMoviesApiTest.assertContentType;
 
 public class DeleteMoviesApiTest {
-    private static final String BASE = "http://localhost:8080"; // !!! добавьте базовую часть URL
+    private static final String BASE = "http://localhost:8080";
     private static MoviesServer server;
     private static HttpClient client;
     private static MoviesStore moviesStore;
 
     @BeforeAll
     static void beforeAll() {
-        MoviesStore moviesStore = new MoviesStore();
+        moviesStore = new MoviesStore();
         server = new MoviesServer(moviesStore, 8080);
         client =  HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
@@ -51,9 +52,10 @@ public class DeleteMoviesApiTest {
     }
 
 
+
     @Test
     void deleteMovieById_whenExists_returns204() throws Exception {
-        Movie movie = server.addMovie(new Movie("Начало", 2010));
+        Movie movie = moviesStore.addMovie(new Movie("Начало", 2010));
         int id = movie.getId();
 
         HttpRequest req = HttpRequest.newBuilder()
@@ -65,9 +67,11 @@ public class DeleteMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(204, resp.statusCode());
-        assertTrue(resp.headers().firstValue("Content-Type").isPresent());
+        assertFalse(resp.headers().firstValue("Content-Type").isPresent());
 
+        assertTrue(moviesStore.getMovieById(id).isEmpty());
     }
+
 
     @Test
     void deleteMovieById_whenNotExists_returns404() throws Exception {
@@ -80,7 +84,7 @@ public class DeleteMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(404, resp.statusCode());
-        GetMoviesApiTest.assertContentType(resp);
+        assertContentType(resp);
 
         JsonObject error = JsonParser.parseString(resp.body()).getAsJsonObject();
         assertEquals("Фильм не найден", error.get("error").getAsString());
@@ -97,7 +101,7 @@ public class DeleteMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(400, resp.statusCode());
-        GetMoviesApiTest.assertContentType(resp);
+        assertContentType(resp);
 
         JsonObject error = JsonParser.parseString(resp.body()).getAsJsonObject();
         assertEquals("Некорректный ID", error.get("error").getAsString());

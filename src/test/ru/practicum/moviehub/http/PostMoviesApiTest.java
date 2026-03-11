@@ -1,12 +1,15 @@
 package ru.practicum.moviehub.http;
 
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.reflect.TypeToken;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import ru.practicum.moviehub.store.Movie;
 import ru.practicum.moviehub.store.MoviesStore;
 
 import java.net.URI;
@@ -15,19 +18,23 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
-
+import ru.practicum.moviehub.api.ErrorResponse;
 import static org.junit.jupiter.api.Assertions.*;
+import static ru.practicum.moviehub.http.GetMoviesApiTest.assertContentType;
+import static ru.practicum.moviehub.http.MoviesHandler.MAX_YEAR;
 
 public class PostMoviesApiTest {
     private static final String BASE = "http://localhost:8080";
     private static MoviesServer server;
     private static HttpClient client;
     private static MoviesStore moviesStore;
+    private static final Gson gson = new Gson();
 
     @BeforeAll
     static void beforeAll() {
-        MoviesStore moviesStore = new MoviesStore();
+        moviesStore = new MoviesStore();
         server = new MoviesServer(moviesStore, 8080);
         client =  HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(2))
@@ -53,8 +60,9 @@ public class PostMoviesApiTest {
 
     @Test
     void postMovies_addFilmSuccess() throws Exception {
-        int randomYear = ThreadLocalRandom.current().nextInt(1888, MoviesHandler.MAX_YEAR + 1);
-        String jsonBody = String.format("{title: Inception, year: %d}", randomYear);
+        int randomYear = ThreadLocalRandom.current().nextInt(1888, MAX_YEAR + 1);
+        Movie newMovie = new Movie("Inception", randomYear);
+        String jsonBody = gson.toJson(newMovie);
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/movies"))
@@ -66,18 +74,21 @@ public class PostMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(201, resp.statusCode());
-        GetMoviesApiTest.assertContentType(resp);
+        assertContentType(resp);
 
-        JsonObject jsonObject = JsonParser.parseString(resp.body()).getAsJsonObject();
-        assertTrue(jsonObject.has("id"));
-        assertEquals("Inception", jsonObject.get("title").getAsString());
-        assertEquals(randomYear, jsonObject.get("year").getAsInt());
+        Movie createdMovie = gson.fromJson(resp.body(), Movie.class);
+
+        assertNotNull(createdMovie.getId());
+        assertTrue(createdMovie.getId() > 0);
+        assertEquals("Inception", createdMovie.getTitle());
+        assertEquals(randomYear, createdMovie.getYear());
 
     }
 
     @Test
     void postMovies_whenEmptyTitle_returns422() throws Exception {
-        String jsonBody = "{\"title\": \"\", \"year\": 2020}";
+        Movie invalidMovie = new Movie("", 2020);
+        String jsonBody = gson.toJson(invalidMovie);
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/movies"))
@@ -89,19 +100,25 @@ public class PostMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(422, resp.statusCode());
-        GetMoviesApiTest.assertContentType(resp);
+        assertContentType(resp);
 
-        JsonObject error = JsonParser.parseString(resp.body()).getAsJsonObject();
-        assertEquals("Ошибка валидации", error.get("error").getAsString());
+        JsonObject jsonObject = gson.fromJson(resp.body(), JsonObject.class);
 
-        JsonArray details = error.get("details").getAsJsonArray();
-        assertTrue(details.toString().contains("название не должно быть пустым"));
+        String errorMsg = jsonObject.get("error").getAsString();
+        JsonArray detailsArray = jsonObject.getAsJsonArray("details");
+        List<String> details = gson.fromJson(detailsArray, new TypeToken<List<String>>(){}.getType());
+
+        ErrorResponse error = new ErrorResponse(errorMsg, details);
+
+        assertEquals("Ошибка валидации", error.error());
+        assertTrue(error.details().contains("название не должно быть пустым"));
     }
 
     @Test
     void postMovies_whenTitleTooLong_returns422() throws Exception {
         String longTitle = "a".repeat(101);
-        String jsonBody = String.format("{\"title\": \"%s\", \"year\": 2020}", longTitle);
+        Movie invalidMovie = new Movie(longTitle, 2020);
+        String jsonBody = gson.toJson(invalidMovie);
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/movies"))
@@ -113,18 +130,19 @@ public class PostMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(422, resp.statusCode());
-        GetMoviesApiTest.assertContentType(resp);
+        assertContentType(resp);
 
         JsonObject error = JsonParser.parseString(resp.body()).getAsJsonObject();
         assertEquals("Ошибка валидации", error.get("error").getAsString());
 
-        JsonArray details = error.get("details").getAsJsonArray();
-        assertTrue(details.toString().contains("название должно быть не длиннее 100 символов"));
+        String details = error.get("details").getAsJsonArray().toString();
+        assertTrue(details.contains("название должно быть не длиннее 100 символов"));
     }
 
     @Test
     void postMovies_whenYearTooLow_returns422() throws Exception {
-        String jsonBody = "{\"title\": \"Inception\", \"year\": 1800}";
+        Movie invalidMovie = new Movie("Inception", 1800);
+        String jsonBody = gson.toJson(invalidMovie);
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/movies"))
@@ -136,18 +154,19 @@ public class PostMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(422, resp.statusCode());
-        GetMoviesApiTest.assertContentType(resp);
+        assertContentType(resp);
 
         JsonObject error = JsonParser.parseString(resp.body()).getAsJsonObject();
         assertEquals("Ошибка валидации", error.get("error").getAsString());
 
         String details = error.get("details").getAsJsonArray().toString();
-        assertTrue(details.contains("год должен быть между 1888 и " + MoviesHandler.MAX_YEAR));
+        assertTrue(details.contains("год должен быть между 1888 и " + MAX_YEAR));
     }
 
     @Test
     void postMovies_whenYearTooHigh_returns422() throws Exception {
-        String jsonBody = String.format("{\"title\": \"Inception\", \"year\": %d}", MoviesHandler.MAX_YEAR + 1);
+        Movie invalidMovie = new Movie("Inception", MAX_YEAR + 1);
+        String jsonBody = gson.toJson(invalidMovie);
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/movies"))
@@ -159,18 +178,19 @@ public class PostMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(422, resp.statusCode());
-        GetMoviesApiTest.assertContentType(resp);
+        assertContentType(resp);
 
         JsonObject error = JsonParser.parseString(resp.body()).getAsJsonObject();
         assertEquals("Ошибка валидации", error.get("error").getAsString());
 
         String details = error.get("details").getAsJsonArray().toString();
-        assertTrue(details.contains("год должен быть между 1888 и " + MoviesHandler.MAX_YEAR));
+        assertTrue(details.contains("год должен быть между 1888 и " + MAX_YEAR));
     }
 
     @Test
     void postMovies_whenInvalidContentType_returns415() throws Exception {
-        String jsonBody = "{\"title\": \"Inception\", \"year\": 2020}";
+        Movie movie = new Movie("Inception", 2020);
+        String jsonBody = gson.toJson(movie);
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/movies"))
@@ -187,7 +207,7 @@ public class PostMoviesApiTest {
 
     @Test
     void postMovies_whenInvalidJson_returns400() throws Exception {
-        String invalidJson = "{title Inception, year 2020}"; // невалидный JSON
+        String invalidJson = "{\"title\": \"Inception\" \"year\": 2020}";
 
         HttpRequest req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/movies"))
@@ -199,7 +219,7 @@ public class PostMoviesApiTest {
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
 
         assertEquals(400, resp.statusCode());
-        GetMoviesApiTest.assertContentType(resp);
+        assertContentType(resp);
 
         JsonObject error = JsonParser.parseString(resp.body()).getAsJsonObject();
         assertTrue(error.has("error"));

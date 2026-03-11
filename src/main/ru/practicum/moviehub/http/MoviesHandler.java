@@ -43,10 +43,11 @@ public class MoviesHandler extends BaseHttpHandler {
                     handleDeleteRequest(exchange, path);
                     break;
                 default:
-                    ErrorResponse.sendMethodNotAllowed(exchange, this);
+                    exchange.getResponseHeaders().set("Allow", "GET, POST, DELETE");
+                    this.sendJson(exchange, 405, ErrorResponse.methodNotAllowed());
             }
         } catch (Exception e) {
-            ErrorResponse.sendInternalError(exchange,this, e.getMessage());
+            this.sendJson(exchange, 500,  ErrorResponse.internalError(e.getMessage()));
         }
     }
 
@@ -60,12 +61,12 @@ public class MoviesHandler extends BaseHttpHandler {
             String idPart = path.substring("/movies/".length());
 
             if (idPart.isEmpty()) {
-                ErrorResponse.sendNotFound(exchange, this,"Путь не найден");
+                this.sendJson(exchange, 404, ErrorResponse.notFound("Путь не найден"));
                 return;
             }
 
             if (!idPart.matches("\\d+")) {
-                ErrorResponse.sendBadRequest(exchange, this,"Некорректный ID");
+                this.sendJson(exchange, 400,  ErrorResponse.badRequest("Некорректный ID"));
                 return;
             }
 
@@ -79,7 +80,7 @@ public class MoviesHandler extends BaseHttpHandler {
             return;
         }
 
-        ErrorResponse.sendNotFound(exchange, this,"Путь не найден: " + path);
+        this.sendJson(exchange, 404,  ErrorResponse.notFound("Путь не найден") + path);
     }
 
     private void handleGetById(HttpExchange exchange, String path) throws IOException {
@@ -90,21 +91,21 @@ public class MoviesHandler extends BaseHttpHandler {
             if (movie.isPresent()) {
                 sendJson(exchange, 200, gson.toJson(movie.get()));
             } else {
-                ErrorResponse.sendNotFound(exchange, this,"Фильм не найден");
+                this.sendJson(exchange, 404,  ErrorResponse.notFound("Фильм не найден"));
             }
         } catch (NumberFormatException e) {
-            ErrorResponse.sendBadRequest(exchange, this,"Некорректный ID");
+            this.sendJson(exchange, 400, ErrorResponse.badRequest("Некорректный ID"));
         }
     }
 
     private void handleFilterByYear(HttpExchange exchange, String query) throws IOException {
-        String yearParam = query.substring(5); // убираем "year="
+        String yearParam = query.substring(5);
 
         try {
             int year = Integer.parseInt(yearParam);
 
             if (year < MIN_YEAR || year > MAX_YEAR) {
-                ErrorResponse.sendBadRequest(exchange, this,"Некорректный параметр запроса — 'year'");
+                this.sendJson(exchange, 400, ErrorResponse.badRequest("Некорректный параметр запроса — 'year'"));
                 return;
             }
 
@@ -112,7 +113,7 @@ public class MoviesHandler extends BaseHttpHandler {
             sendJson(exchange, 200, gson.toJson(movies));
 
         } catch (NumberFormatException e) {
-            ErrorResponse.sendBadRequest(exchange, this,"Некорректный параметр запроса — 'year'");
+            this.sendJson(exchange, 400, ErrorResponse.badRequest("Некорректный параметр запроса — 'year'"));
         }
     }
 
@@ -120,12 +121,12 @@ public class MoviesHandler extends BaseHttpHandler {
 
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         if (contentType == null || !contentType.startsWith("application/json")) {
-            ErrorResponse.sendUnsupportedMediaType(exchange, this);
+            this.sendJson(exchange, 415, ErrorResponse.unsupportedMediaType());
             return;
         }
 
         if (!exchange.getRequestURI().getPath().equals("/movies")) {
-            ErrorResponse.sendNotFound(exchange, this, "Путь не найден");
+            this.sendJson(exchange, 404,  ErrorResponse.notFound("Путь не найден"));
             return;
         }
 
@@ -134,7 +135,7 @@ public class MoviesHandler extends BaseHttpHandler {
             List<String> validationErrors = validateMovie(movie);
 
             if (!validationErrors.isEmpty()) {
-                ErrorResponse.sendValidationError(exchange,this, validationErrors);
+                this.sendJson(exchange, 422, ErrorResponse.validationError(validationErrors).toJson());
                 return;
             }
 
@@ -142,25 +143,25 @@ public class MoviesHandler extends BaseHttpHandler {
             sendJson(exchange, 201, gson.toJson(created));
 
         } catch (JsonSyntaxException e) {
-            ErrorResponse.sendBadRequest(exchange, this,"Некорректный JSON");
+            this.sendJson(exchange, 400, ErrorResponse.badRequest("Некорректный JSON"));
         }
     }
 
     private void handleDeleteRequest(HttpExchange exchange, String path) throws IOException {
         if (!path.startsWith("/movies/")) {
-            ErrorResponse.sendNotFound(exchange,this, "Путь не найден");
+            this.sendJson(exchange, 404,  ErrorResponse.notFound("Путь не найден"));
             return;
         }
 
         String idPart = path.substring("/movies/".length());
 
         if (idPart.isEmpty()) {
-            ErrorResponse.sendNotFound(exchange,this, "Путь не найден");
+            this.sendJson(exchange, 404,  ErrorResponse.notFound("Путь не найден"));
             return;
         }
 
         if (!idPart.matches("\\d+")) {
-            ErrorResponse.sendBadRequest(exchange,this, "Некорректный ID");
+            this.sendJson(exchange, 400, ErrorResponse.badRequest("Некорректный ID"));
             return;
         }
 
@@ -169,10 +170,10 @@ public class MoviesHandler extends BaseHttpHandler {
             if (moviesStore.deleteMovie(id)) {
                 sendNoContent(exchange);
             } else {
-                ErrorResponse.sendNotFound(exchange, this,"Фильм не найден");
+                this.sendJson(exchange, 404,  ErrorResponse.notFound("Фильм не найден"));
             }
         } catch (NumberFormatException e) {
-            ErrorResponse.sendBadRequest(exchange,this, "Некорректный ID");
+            this.sendJson(exchange, 400, ErrorResponse.badRequest("Некорректный ID"));
         }
     }
 
